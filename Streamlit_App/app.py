@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import joblib
 
+from chatbot import student_chat
+
 APP_DIR = Path(__file__).parent
 
 # -----------------------------
@@ -16,7 +18,7 @@ APP_DIR = Path(__file__).parent
 # -----------------------------
 
 st.set_page_config(
-    page_title="ScholarIQ — Student Performance Prediction",
+    page_title="Student Performance Prediction System",
     page_icon="🎓",
     layout="wide"
 )
@@ -55,14 +57,14 @@ except Exception as e:
 # Chart theme (dark background)
 # -----------------------------
 
-CHART_FONT = {"family": "Inter", "color": "#AC9CA0"}
-ACCENT = "#D4A24E"
-MAROON = "#8C1C3B"
+CHART_FONT = {"family": "Inter", "color": "#93A8C7"}
+ACCENT = "#3B82F6"
+MAROON = "#1E3A8A"
 SUCCESS = "#3DDC97"
 AMBER = "#F5A524"
 RED = "#F5646B"
 GRID = "rgba(255,255,255,0.08)"
-INK = "#F2ECEC"
+INK = "#EAF2FF"
 
 # -----------------------------
 # Helpers
@@ -113,10 +115,6 @@ today = datetime.now()
 
 st.markdown(f"""
 <div class="hero">
-    <div class="logo-lockup">
-        <div class="logo-mark">🎓</div>
-        <div class="logo-word">ScholarIQ <span class="dim">· Academic Intelligence</span></div>
-    </div>
     <div class="main-title">Predict student outcomes<br><span class="accent">before results day</span></div>
     <div class="sub-title">Enter a student's profile and get an instant, data-driven forecast of their final academic score — powered by a trained machine learning model.</div>
 </div>
@@ -172,44 +170,43 @@ gender_value = 1 if gender == "Male" else 0
 extra_classes_value = 1 if extra_classes == "Yes" else 0
 
 # ============================================================
-# SIDEBAR — live preview only
+# LIVE SNAPSHOT — inline preview strip (replaces the old sidebar)
 # ============================================================
 
-with st.sidebar:
-    st.markdown(
-        '<div class="preview-header"><span class="preview-pulse"></span>Live Preview</div>',
-        unsafe_allow_html=True
-    )
-    st.caption("Updates instantly as you fill in the form")
-    st.write("")
+snapshot_tip = ""
+if attendance < 75:
+    snapshot_tip = '<div class="preview-tip warn">⚠️ Attendance is below 75% — this will weigh on the forecast.</div>'
+elif study_hours < 3:
+    snapshot_tip = '<div class="preview-tip warn">📖 Low study hours logged — consider raising this input.</div>'
+elif failures > 0:
+    snapshot_tip = '<div class="preview-tip warn">❌ Previous failures on record — this lowers the projected score.</div>'
+else:
+    snapshot_tip = '<div class="preview-tip good">✅ Profile looks strong across the board.</div>'
 
-    st.markdown(f"""
-    <div class="preview-card">
-        <div class="preview-name">{student_name if student_name.strip() else "Unnamed Student"}</div>
-        <div class="preview-meta">{gender} · Age {age}</div>
+st.markdown(f"""
+<div class="snapshot-bar">
+    <div class="preview-header"><span class="preview-pulse"></span>Live Snapshot</div>
+    <div class="snapshot-grid">
+        <div class="snapshot-item">
+            <div class="snap-label">Student</div>
+            <div class="snap-value">{student_name.strip() if student_name.strip() else "Unnamed"} · {gender}, {age}</div>
+        </div>
+        <div class="snapshot-item">
+            <div class="snap-label">Attendance</div>
+            <div class="snap-value">{attendance:.0f}%</div>
+        </div>
+        <div class="snapshot-item">
+            <div class="snap-label">Assignments</div>
+            <div class="snap-value">{assignments}/10</div>
+        </div>
+        <div class="snapshot-item">
+            <div class="snap-label">Study Hours</div>
+            <div class="snap-value">{study_hours} hrs/day</div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
-
-    st.metric("Attendance", f"{attendance:.0f}%")
-    st.progress(attendance / 100)
-
-    st.write("")
-    st.metric("Assignments", f"{assignments}/10")
-    st.metric("Study Hours / day", f"{study_hours} hrs")
-
-    st.write("")
-
-    if attendance < 75:
-        st.markdown('<div class="preview-tip warn">⚠️ Attendance is below 75% — this will weigh on the forecast.</div>', unsafe_allow_html=True)
-    elif study_hours < 3:
-        st.markdown('<div class="preview-tip warn">📖 Low study hours logged — consider raising this input.</div>', unsafe_allow_html=True)
-    elif failures > 0:
-        st.markdown('<div class="preview-tip warn">❌ Previous failures on record — this lowers the projected score.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="preview-tip good">✅ Profile looks strong across the board.</div>', unsafe_allow_html=True)
-
-    st.write("")
-    st.markdown('<div class="footer-note">v2.0 · SCIKIT-LEARN ENGINE</div>', unsafe_allow_html=True)
+    {snapshot_tip}
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # PREDICT BUTTON
@@ -248,6 +245,24 @@ if predict and model is not None:
     grade, performance, tone = grade_for(prediction)
     ring_color = score_color(prediction)
 
+    # Persist this student's profile + prediction in session_state so the
+    # floating AI Assistant widget can still access it on the next rerun —
+    # Streamlit reruns the whole script on every interaction, so a plain
+    # local variable here would be lost the moment the person opens the
+    # chat or sends a message. Keys match exactly what chatbot.py expects.
+    st.session_state["student_data"] = {
+        "name": student_name if student_name.strip() else "the student",
+        "gender": gender,
+        "age": age,
+        "assignments": assignments,
+        "internal_marks": internal_marks,
+        "attendance": attendance,
+        "study_hours": study_hours,
+        "failures": failures,
+        "extra_classes": extra_classes,
+        "prediction": prediction,
+    }
+
     st.markdown('<div class="reveal">', unsafe_allow_html=True)
     st.divider()
 
@@ -262,7 +277,7 @@ if predict and model is not None:
             donut = go.Figure(go.Pie(
                 values=[prediction, 100 - prediction],
                 hole=0.78,
-                marker=dict(colors=[ring_color, "rgba(255,255,255,0.08)"], line=dict(color="#0A0708", width=2)),
+                marker=dict(colors=[ring_color, "rgba(255,255,255,0.08)"], line=dict(color="#050B14", width=2)),
                 textinfo="none",
                 sort=False,
                 direction="clockwise"
@@ -422,7 +437,7 @@ if predict and model is not None:
     section_label("📥", "Downloadable Report")
 
     report = f"""========================================================
-        SCHOLARIQ — STUDENT PERFORMANCE REPORT
+        STUDENT PERFORMANCE REPORT
 ========================================================
 Student Name : {student_name if student_name else '-'}
 Gender       : {gender}
@@ -452,8 +467,105 @@ Generated on {today.strftime('%d %B %Y')}
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================
+# FLOATING AI ACADEMIC ASSISTANT — Gemini-powered chat widget
+# ============================================================
+#
+# A circular toggle button fixed to the bottom-right corner opens a
+# slide-in glass panel. Both are built with st.container(key=...), which
+# stamps a stable CSS class (st-key-<key>) onto the wrapping div — that's
+# what style.css hooks into to pin them to the viewport. Requires
+# Streamlit >= 1.32 (for container `key` and `height`).
+#
+# Chat history + open/closed state persist in session_state, and
+# student_data (captured above when a prediction was run) is what gets
+# sent to Gemini as context for every answer.
+
+if "chat_open" not in st.session_state:
+    st.session_state.chat_open = False
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+has_profile = "student_data" in st.session_state
+
+# ---- Floating toggle button ----
+
+with st.container(key="fab_container"):
+    fab_icon = "✕" if st.session_state.chat_open else "💬"
+    if st.button(fab_icon, key="fab_button", help="Ask the AI Academic Assistant"):
+        st.session_state.chat_open = not st.session_state.chat_open
+        st.rerun()
+
+    if not st.session_state.chat_open and has_profile and not st.session_state.chat_history:
+        st.markdown('<div class="fab-ping"></div>', unsafe_allow_html=True)
+
+# ---- Slide-in chat panel ----
+
+if st.session_state.chat_open:
+    with st.container(key="chat_panel"):
+
+        st.markdown("""
+        <div class="chat-panel-header">
+            <div class="chat-panel-avatar">🤖</div>
+            <div class="chat-panel-heading">
+                <div class="chat-panel-name">AI Academic Assistant</div>
+                <div class="chat-panel-status"><span class="chat-dot"></span>Powered by Gemini</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not has_profile:
+            st.markdown(
+                '<div class="chat-empty">Run a prediction above first — '
+                'I use that student\'s profile to answer your questions. 📊</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            with st.container(key="chat_messages", height=300):
+                if not st.session_state.chat_history:
+                    sd = st.session_state["student_data"]
+                    st.markdown(
+                        f'<div class="chat-empty">Hi! I can see {sd["name"]}\'s predicted score '
+                        f'is <b>{sd["prediction"]:.1f}/100</b>. Ask me anything about it — '
+                        'like how to improve, or what\'s holding the score back. 👋</div>',
+                        unsafe_allow_html=True
+                    )
+                for msg in st.session_state.chat_history:
+                    role_class = "chat-bubble-user" if msg["role"] == "user" else "chat-bubble-bot"
+                    st.markdown(f'<div class="chat-bubble {role_class}">{msg["text"]}</div>', unsafe_allow_html=True)
+
+            with st.form(key="chat_form", clear_on_submit=True):
+                form_cols = st.columns([5, 1])
+                with form_cols[0]:
+                    user_question = st.text_input(
+                        "Ask a question",
+                        placeholder="How can I improve my score?",
+                        label_visibility="collapsed",
+                    )
+                with form_cols[1]:
+                    submitted = st.form_submit_button("➤", use_container_width=True)
+
+            if submitted and user_question.strip():
+                question = user_question.strip()
+                st.session_state.chat_history.append({"role": "user", "text": question})
+                try:
+                    with st.spinner("Thinking..."):
+                        answer = student_chat(question, st.session_state["student_data"])
+                    st.session_state.chat_history.append({"role": "assistant", "text": answer})
+                except Exception as e:
+                    st.session_state.chat_history.append(
+                        {"role": "assistant", "text": f"⚠️ I couldn't respond: {e}"}
+                    )
+                st.rerun()
+
+            if st.session_state.chat_history:
+                with st.container(key="chat_clear_container"):
+                    if st.button("Clear conversation", key="chat_clear"):
+                        st.session_state.chat_history = []
+                        st.rerun()
+
+# ============================================================
 # FOOTER
 # ============================================================
 
 st.divider()
-st.markdown('<div class="footer-note">SCHOLARIQ · PREDICTIVE ACADEMIC INTELLIGENCE</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer-note">PREDICTIVE ACADEMIC INTELLIGENCE · POWERED BY MACHINE LEARNING</div>', unsafe_allow_html=True)

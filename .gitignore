@@ -1,3 +1,4 @@
+.streamlit/secrets.toml
 __pycache__/
 .ipynb_checkpoints/
 *.pyc
@@ -10,3 +11,4 @@ venv/
 .DS_Store
 
 Thumbs.db
+.env

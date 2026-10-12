@@ -41,5 +41,3 @@ README.md
 
 requirements.txt
 
-## 
-
