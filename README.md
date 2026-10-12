@@ -1,5 +1,7 @@
 # 🎓 AI-Based Student Academic Performance Prediction System
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=omshankar018/Student-Performance-Prediction-System&branch=main&mainModule=Streamlit_App/app.py)
+
 ## Overview
 
 This project predicts student academic performance using Machine Learning.
